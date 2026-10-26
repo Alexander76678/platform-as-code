@@ -68,6 +68,12 @@ jobs:
       - name: Generate Ansible Inventory
         run: ./terraform/render_inventory.sh
 
+      - name: Write Ansible Vault password file
+        run: |
+          mkdir -p ~
+          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ~/.vault_pass
+          chmod 600 ~/.vault_pass
+
       - name: Run Ansible Playbook
         run: |
           ansible-playbook site.yml -i inventory/hosts.yml
