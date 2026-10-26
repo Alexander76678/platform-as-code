@@ -1,0 +1,6 @@
+---
+# Application configuration shared between site.yml and deploy.yml
+app_name: platform-app
+app_port: 8000
+app_dir: /opt/platform-app
+app_image: "ghcr.io/{{ ghcr_user }}/platform-as-code:latest"

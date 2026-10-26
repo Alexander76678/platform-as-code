@@ -18,8 +18,7 @@ all:
     ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
     ghcr_user: "alexander76678"
     ghcr_token: "{{ vault_ghcr_token }}"
-    app_image: "ghcr.io/{{ ghcr_user }}/platform-as-code:latest"
-    app_port: 8000
+    #app name is on vars.yml
 
   children:
     appservers:
