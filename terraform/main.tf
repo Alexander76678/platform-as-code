@@ -102,7 +102,7 @@ resource "aws_security_group" "lab" {
 # ============================================
 resource "aws_key_pair" "lab" {
   key_name   = var.key_pair_name
-  public_key = file(var.public_key_path)
+  public_key = var.ssh_public_key != "" ? var.ssh_public_key : file(pathexpand(var.public_key_path))
 }
 
 # ============================================
