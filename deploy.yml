@@ -1,0 +1,66 @@
+---
+- name: Rolling deploy — one app server at a time
+  hosts: appservers
+  serial: 1
+  become: true
+
+  tasks:
+    - name: Remove {{ inventory_hostname }} from load balancer pool
+      ansible.builtin.template:
+        src: roles/loadbalancer/templates/upstream.conf.j2
+        dest: /etc/nginx/conf.d/upstream.conf
+        mode: "0644"
+      delegate_to: "{{ groups['loadbalancers'][0] }}"
+      vars:
+        deploying_host: "{{ inventory_hostname }}"
+
+    - name: Reload Nginx to apply drain
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+      delegate_to: "{{ groups['loadbalancers'][0] }}"
+
+    - name: Let in-flight requests finish (drain)
+      ansible.builtin.pause:
+        seconds: 3
+
+    - name: Pull latest image
+      community.docker.docker_image:
+        name: "{{ app_image }}"
+        source: pull
+        force_source: true
+
+    - name: Restart container with new image
+      community.docker.docker_container:
+        name: "{{ app_name }}"
+        image: "{{ app_image }}"
+        state: started
+        recreate: true
+        restart_policy: always
+        env_file: /opt/platform-app/app.env
+        ports:
+          - "{{ app_port }}:8000"
+
+    - name: Wait for new container to be healthy
+      ansible.builtin.uri:
+        url: "http://localhost:{{ app_port }}/health"
+        status_code: 200
+      register: health
+      until: health.status == 200
+      retries: 30
+      delay: 2
+
+    - name: Re-add {{ inventory_hostname }} to load balancer pool
+      ansible.builtin.template:
+        src: roles/loadbalancer/templates/upstream.conf.j2
+        dest: /etc/nginx/conf.d/upstream.conf
+        mode: "0644"
+      delegate_to: "{{ groups['loadbalancers'][0] }}"
+      vars:
+        deploying_host: ""
+
+    - name: Reload Nginx to apply rejoin
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+      delegate_to: "{{ groups['loadbalancers'][0] }}"

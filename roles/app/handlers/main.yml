@@ -1,0 +1,6 @@
+---
+- name: Restart app container
+  community.docker.docker_container:
+    name: "{{ app_name }}"
+    state: started   # Ensures the container is running
+    restart: true

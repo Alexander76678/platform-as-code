@@ -1,0 +1,20 @@
+plugin: amazon.aws.aws_ec2
+regions:
+  - eu-north-1
+filters:
+  instance-state-name: running
+keyed_groups:
+  - key: tags.Name
+    prefix: ''
+hostnames:
+  - ip-address
+compose:
+  ansible_user: ubuntu
+  ansible_ssh_private_key_file: >-
+    {% if tags.Environment is defined and tags.Environment == 'lb' %}
+    ~/.ssh/lbkey.pem
+    {% elif tags.Environment is defined and tags.Environment == 'app1' %}
+    ~/.ssh/app1key.pem
+    {% elif tags.Environment is defined and tags.Environment == 'app2' %}
+    ~/.ssh/app2.pem
+    {% endif %}

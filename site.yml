@@ -1,0 +1,15 @@
+---
+- name: Configure database + load balancer
+  hosts: loadbalancers
+  become: true
+  roles:
+    - database
+    - loadbalancer
+
+- name: Configure app servers
+  hosts: appservers
+  become: true
+  roles:
+    - docker
+    - app
+#this is a comment to find if the ci is working

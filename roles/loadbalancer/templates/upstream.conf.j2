@@ -1,0 +1,7 @@
+upstream platform_app {
+{% for host in groups['appservers'] %}
+{% if host != (deploying_host | default('')) %}
+    server {{ hostvars[host]['private_ip'] }}:{{ app_port }} max_fails=2 fail_timeout=5s;
+{% endif %}
+{% endfor %}
+}

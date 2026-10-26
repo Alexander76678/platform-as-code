@@ -1,0 +1,62 @@
+name: "CI: Validate Infrastructure and Configuration"
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # --- Terraform Validation ---
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.0"
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        working-directory: ./terraform
+
+      - name: Terraform Init & Validate
+        run: |
+          terraform init -backend=false
+          terraform validate
+        working-directory: ./terraform
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: "v0.53.0"
+
+      - name: TFLint
+        run: tflint --init && tflint
+        working-directory: ./terraform
+
+      # --- Ansible Validation ---
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Ansible and Linters
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible ansible-lint yamllint
+
+      - name: Install Ansible Collections
+        run: ansible-galaxy collection install -r requirements.yml
+
+      - name: Run yamllint
+        run: yamllint -c .yamllint .
+        continue-on-error: true # Start with soft failures for linting
+
+      - name: Run ansible-lint
+        run: ansible-lint .
+        continue-on-error: true
+
+      - name: Ansible Syntax Check
+        run: ansible-playbook site.yml --syntax-check -i inventory/ci/hosts.yml
