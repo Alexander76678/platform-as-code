@@ -123,6 +123,7 @@ locals {
     lb   = { type = "t3.micro", private_ip = "10.0.1.10" }
     app1 = { type = "t3.micro", private_ip = "10.0.1.11" }
     app2 = { type = "t3.micro", private_ip = "10.0.1.12" }
+    db   = { type = "t3.micro", private_ip = "10.0.1.13" }
   }
 }
 

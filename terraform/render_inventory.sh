@@ -40,9 +40,9 @@ all:
 
     databases:
       hosts:
-        lb:
-          ansible_host: $(jq -r '.lb.public_ip' /tmp/ips.json)
-          private_ip: $(jq -r '.lb.private_ip' /tmp/ips.json)
+        db:
+          ansible_host: $(jq -r '.db.public_ip' /tmp/ips.json)
+          private_ip: $(jq -r '.db.private_ip' /tmp/ips.json)
 EOF
 
 echo "Inventory written to $INV_FILE"
