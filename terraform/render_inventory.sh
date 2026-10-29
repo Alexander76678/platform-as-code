@@ -23,7 +23,7 @@ all:
   children:
     appservers:
       vars:
-        mongo_uri: "mongodb://$(jq -r '.lb.private_ip' /tmp/ips.json):27017"
+        mongo_uri: "mongodb://$(jq -r '.db.private_ip' /tmp/ips.json):27017"
       hosts:
         app1:
           ansible_host: $(jq -r '.app1.public_ip' /tmp/ips.json)
