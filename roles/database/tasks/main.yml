@@ -28,15 +28,94 @@
     state: present
     update_cache: true
 
-- name: Bind MongoDB to all interfaces
-  ansible.builtin.lineinfile:
-    path: /etc/mongod.conf
-    regexp: '^\s*bindIp:'
-    line: '  bindIp: 0.0.0.0'
-  notify: Restart mongod
+- name: Ensure MongoDB data and log directory ownership is correct
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: mongodb
+    group: mongodb
+    recurse: true
+  loop:
+    - /var/lib/mongodb
+    - /var/log/mongodb
 
-- name: Ensure mongod is running and enabled
-  ansible.builtin.service:
-    name: mongod
-    state: started
-    enabled: true
+- name: Ensure MongoDB is up and configured
+  block:
+    - name: Start and enable MongoDB
+      ansible.builtin.systemd:
+        name: mongod
+        state: started
+        enabled: true
+
+    - name: Wait for MongoDB to accept connections (first boot)
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 27017
+        timeout: 90
+
+    - name: Bind MongoDB to all interfaces
+      ansible.builtin.lineinfile:
+        path: /etc/mongod.conf
+        regexp: '^\s*bindIp:'
+        line: '  bindIp: 0.0.0.0'
+      notify: Restart mongod
+
+    - name: Apply pending handler now (restart happens here, inside the block)
+      ansible.builtin.meta: flush_handlers
+
+    - name: Wait for MongoDB to settle after restart
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 27017
+        timeout: 60
+
+  rescue:
+    - name: Show recent mongod log lines (for debugging)
+      ansible.builtin.command: tail -n 20 /var/log/mongodb/mongod.log
+      changed_when: false
+      failed_when: false
+
+    - name: Stop mongod before repair
+      ansible.builtin.systemd:
+        name: mongod
+        state: stopped
+      failed_when: false
+
+    - name: Re-assert ownership before repair
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: mongodb
+        group: mongodb
+        recurse: true
+      loop:
+        - /var/lib/mongodb
+        - /var/log/mongodb
+
+    - name: Remove stale socket before repair
+      ansible.builtin.file:
+        path: /tmp/mongodb-27017.sock
+        state: absent
+
+    - name: Repair the data directory as the mongodb user
+      ansible.builtin.command:
+        cmd: mongod --repair --config /etc/mongod.conf
+      become_user: mongodb
+      changed_when: true
+
+    - name: Start MongoDB after repair
+      ansible.builtin.systemd:
+        name: mongod
+        state: started
+        enabled: true
+
+    - name: Confirm MongoDB is accepting connections after repair
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 27017
+        timeout: 90
+
+    - name: Show recent mongod log lines after repair
+      ansible.builtin.command: tail -n 20 /var/log/mongodb/mongod.log
+      changed_when: false
+      failed_when: false
