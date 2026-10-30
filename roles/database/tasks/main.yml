@@ -6,116 +6,49 @@
       - curl
     state: present
     update_cache: true
+    cache_valid_time: 3600
 
-- name: Add MongoDB GPG key
+- name: Add MongoDB 9.0 GPG key
   ansible.builtin.get_url:
-    url: https://www.mongodb.org/static/pgp/server-7.0.asc
-    dest: /usr/share/keyrings/mongodb-server-7.0.asc
+    url: https://pgp.mongodb.com/server-9.asc
+    dest: /usr/share/keyrings/mongodb-server-9.asc
     mode: "0644"
 
-- name: Add MongoDB repository
+- name: Add MongoDB 9.0 repository
   ansible.builtin.apt_repository:
     repo: >-
-      deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.asc]
+      deb [ arch=amd64,arm64
+      signed-by=/usr/share/keyrings/mongodb-server-9.asc ]
       https://repo.mongodb.org/apt/ubuntu
-      jammy/mongodb-org/7.0 multiverse
-    filename: mongodb-org-7.0
+      resolute/mongodb-org/9.0 multiverse
+    filename: mongodb-org-9.0
     state: present
 
-- name: Install MongoDB
+- name: Install MongoDB 9.0
   ansible.builtin.apt:
     name: mongodb-org
     state: present
     update_cache: true
 
-- name: Ensure MongoDB data and log directory ownership is correct
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: mongodb
-    group: mongodb
-    recurse: true
-  loop:
-    - /var/lib/mongodb
-    - /var/log/mongodb
+- name: Bind MongoDB to all interfaces
+  ansible.builtin.lineinfile:
+    path: /etc/mongod.conf
+    regexp: '^\s*bindIp:'
+    line: '  bindIp: 0.0.0.0'
+  notify: Restart mongod
 
-- name: Ensure MongoDB is up and configured
-  block:
-    - name: Start and enable MongoDB
-      ansible.builtin.systemd:
-        name: mongod
-        state: started
-        enabled: true
+- name: Apply config changes before the first start
+  ansible.builtin.meta: flush_handlers
 
-    - name: Wait for MongoDB to accept connections (first boot)
-      ansible.builtin.wait_for:
-        host: 127.0.0.1
-        port: 27017
-        timeout: 90
+- name: Ensure MongoDB is running and enabled
+  ansible.builtin.systemd:
+    name: mongod
+    state: started
+    enabled: true
 
-    - name: Bind MongoDB to all interfaces
-      ansible.builtin.lineinfile:
-        path: /etc/mongod.conf
-        regexp: '^\s*bindIp:'
-        line: '  bindIp: 0.0.0.0'
-      notify: Restart mongod
+- name: Wait for MongoDB to accept connections
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 27017
+    timeout: 90
 
-    - name: Apply pending handler now (restart happens here, inside the block)
-      ansible.builtin.meta: flush_handlers
-
-    - name: Wait for MongoDB to settle after restart
-      ansible.builtin.wait_for:
-        host: 127.0.0.1
-        port: 27017
-        timeout: 60
-
-  rescue:
-    - name: Show recent mongod log lines (for debugging)
-      ansible.builtin.command: tail -n 20 /var/log/mongodb/mongod.log
-      changed_when: false
-      failed_when: false
-
-    - name: Stop mongod before repair
-      ansible.builtin.systemd:
-        name: mongod
-        state: stopped
-      failed_when: false
-
-    - name: Re-assert ownership before repair
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: directory
-        owner: mongodb
-        group: mongodb
-        recurse: true
-      loop:
-        - /var/lib/mongodb
-        - /var/log/mongodb
-
-    - name: Remove stale socket before repair
-      ansible.builtin.file:
-        path: /tmp/mongodb-27017.sock
-        state: absent
-
-    - name: Repair the data directory as the mongodb user
-      ansible.builtin.command:
-        cmd: mongod --repair --config /etc/mongod.conf
-      become_user: mongodb
-      changed_when: true
-
-    - name: Start MongoDB after repair
-      ansible.builtin.systemd:
-        name: mongod
-        state: started
-        enabled: true
-
-    - name: Confirm MongoDB is accepting connections after repair
-      ansible.builtin.wait_for:
-        host: 127.0.0.1
-        port: 27017
-        timeout: 90
-
-    - name: Show recent mongod log lines after repair
-      ansible.builtin.command: tail -n 20 /var/log/mongodb/mongod.log
-      changed_when: false
-      failed_when: false
